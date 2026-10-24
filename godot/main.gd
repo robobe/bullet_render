@@ -472,6 +472,7 @@ func _process(_delta: float) -> void:
 	var state := control_display
 	var drops := 0
 	if adapter != null:
+		adapter.publish_health()
 		var stats := adapter.get_stats()
 		drops = stats.sequence_gaps + stats.stale
 	if not capture_only and now - last_stats_ms >= 5000:

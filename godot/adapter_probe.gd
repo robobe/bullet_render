@@ -56,6 +56,7 @@ func _process(_delta: float) -> bool:
 		var request := adapter.poll_request()
 		if not request.is_empty():
 			_publish(request)
+	adapter.publish_health()
 	var stats := adapter.get_stats()
 	if stats != previous:
 		print("PROBE ", JSON.stringify(stats))

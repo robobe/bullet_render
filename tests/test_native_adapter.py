@@ -488,3 +488,26 @@ def test_native_wind_contract_readback_and_request(probe):
         Publisher(native.settings.socket,STATE_TOPIC.decode()).put(json.dumps(dict(packet,settings=dict(packet['settings'],correlation_time_s=0))))
         native.event(lambda e:e.get('invalid',0)>0)
         native.event(lambda e:e.get('wind_state')=={})
+
+
+def test_renderer_health_uses_existing_image_endpoint(probe):
+    from bullet_msgs import schema_bytes
+    from bullet_msgs.control import STATE_TOPIC
+    from jsonschema import validate
+    native=probe()
+    owner=native.event(lambda e:'controller_id' in e)['controller_id']
+    profile=json.loads(Path(native.process.args[native.process.args.index('--')+1]).read_text())
+    with zmq.Context() as context, context.socket(zmq.SUB) as observer:
+        observer.setsockopt(zmq.LINGER,0)
+        observer.setsockopt(zmq.SUBSCRIBE,b'analysis/render/health')
+        observer.connect(profile['image_endpoint'])
+        time.sleep(.2)
+        packet=dict(schema_version=1,physics_id='physics',episode_id='episode',controller_id=owner,state='running',reason='test',simulation_time_s=0.)
+        Publisher(native.settings.socket,STATE_TOPIC.decode()).put(json.dumps(packet))
+        assert observer.poll(5000)
+        topic,payload=observer.recv_multipart()
+        assert topic==b'analysis/render/health'
+        value=json.loads(payload)
+        validate(value,json.loads(schema_bytes('render_health.json')))
+        assert value['physics_id']=='physics' and value['episode_id']=='episode'
+        assert value['stats']['publication_drops']==0

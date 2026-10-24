@@ -214,6 +214,7 @@ struct ZmqCameraAdapter::Impl {
     std::deque<std::pair<std::string, int64_t>> commands;
     std::string controller_id = std::to_string(getpid()) + "-" + std::to_string(Clock::now().time_since_epoch().count());
     Dictionary control_state, spawn_state, wind_state;
+    Clock::time_point next_health{};
     String control_error;
     Clock::time_point pose_received{}, capture_received{};
     std::atomic<int64_t> invalid{0}, superseded{0};
@@ -360,6 +361,7 @@ void ZmqCameraAdapter::_bind_methods() {
     ClassDB::bind_method(D_METHOD("poll_request"), &ZmqCameraAdapter::poll_request);
     ClassDB::bind_method(D_METHOD("publish_frame", "pixels", "request"), &ZmqCameraAdapter::publish_frame);
     ClassDB::bind_method(D_METHOD("get_stats"), &ZmqCameraAdapter::get_stats);
+    ClassDB::bind_method(D_METHOD("publish_health"), &ZmqCameraAdapter::publish_health);
     ClassDB::bind_method(D_METHOD("publish_control", "action"), &ZmqCameraAdapter::publish_control);
     ClassDB::bind_method(D_METHOD("poll_collision_pose"), &ZmqCameraAdapter::poll_collision_pose);
     ClassDB::bind_method(D_METHOD("publish_collision", "report"), &ZmqCameraAdapter::publish_collision);
@@ -732,4 +734,23 @@ Dictionary ZmqCameraAdapter::get_wind_state() {
     for (const auto key : {"physics_id", "episode_id", "controller_id"})
         if (impl->wind_state[key] != control[key]) return {};
     return impl->wind_state;
+}
+
+
+bool ZmqCameraAdapter::publish_health() {
+    const auto now = Clock::now();
+    if (!impl->running || !impl->publisher || now < impl->next_health) return false;
+    const auto state = get_control_state();
+    if (state.is_empty()) return false;
+    impl->next_health = now + std::chrono::seconds(1);
+    Dictionary packet;
+    packet["schema_version"] = int64_t(1);
+    packet["physics_id"] = state["physics_id"];
+    packet["episode_id"] = state["episode_id"];
+    packet["generated_us"] = int64_t(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
+    packet["stats"] = get_stats();
+    const auto raw = JSON::stringify(packet, "", true, true).utf8();
+    constexpr char topic[] = "analysis/render/health";
+    return zmq_send(impl->publisher, topic, sizeof(topic) - 1, ZMQ_SNDMORE | ZMQ_DONTWAIT) >= 0 &&
+        zmq_send(impl->publisher, raw.get_data(), raw.length(), ZMQ_DONTWAIT) >= 0;
 }

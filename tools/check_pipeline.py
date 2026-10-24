@@ -229,7 +229,7 @@ def main():
                         first_image = Image.frombytes('RGB', (640,480), image.data)
                         assert len(set(image.data)) > 32, 'blank camera frame'
                     images += 1
-                else:
+                elif channel.topic == 'render/drone_1/pose':
                     pose = json.loads(message.data)
                     assert len(pose['position_m']) == 3 and len(pose['orientation_xyzw']) == 4
                     assert pose['schema_version'] == 2 and len(pose['linear_velocity_m_s']) == 3

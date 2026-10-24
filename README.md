@@ -176,8 +176,8 @@ uv run --locked --all-packages --all-extras --all-groups python -m examples.exte
 ```
 
 Use workspace task **Bullet: Run all** to build the native renderer and launch
-`bullet_app`, Godot and external-RC `bullet_drone` physics in one terminal.
-MCAP recording is disabled in this task. Wait for `Mission READY`, then press Start in Godot. Exiting any
+`bullet_app`, Godot, external-RC `bullet_drone` physics and the episode recorder in one terminal.
+Recording is enabled automatically, with process logs under `recordings/launch_<UTC>/`. Wait for `Mission READY`, then press Start in Godot. Exiting any
 service stops the remaining services. PlotJuggler and the standalone video viewer
 are not launched by this task.
 
@@ -314,7 +314,7 @@ and nonblocking publication remain in place. The recorder uses `input: shm_image
 copies pixels into its bounded 64 MiB queue, and reports skipped SHM images.
 Malformed data and queue overflow fail recording rather than hiding accepted-data
 loss. ZMQ can also drop notifications before receipt, which counters cannot fully
-observe. Arrival-time MCAP alone does not provide exact image/pose association; use the
+observe. The recorder now preserves an exact image identity sidecar, `camera/front/image/metadata`, linked by image log time and record sequence. Use the
 stamped source identity when available.
 
 Start the camera/bbox preview (or use workspace **Bullet: App (debug)**):
@@ -585,3 +585,32 @@ from the drone camera. Godot generates neither wind physics nor random gusts.
 Checks: `godot --headless --path godot --script test_wind.gd`,
 `./tools/run_godot.sh --path godot --script test_wind_scene.gd` (display required),
 and `uv run --locked --no-sync pytest -q tests/test_native_adapter.py tests/test_live_wind_pipeline.py`.
+
+## Automatic flight analysis recording
+
+**Bullet: Run all** builds the renderer and runs `tools/run_flight.py` in the
+shared uv environment. It starts the recorder before flight services, creates
+one MCAP for each running episode and stores separate `app.log`, `physics.log`,
+`godot.log` and `recorder.log` files under `recordings/launch_<UTC>/`. MCAP health
+metadata includes that launch ID. The launcher drains the recorder after stopping
+other services. Existing recordings are never overwritten or automatically deleted.
+Do not launch another recorder separately when using this task.
+
+The normal profile now includes wind, simulation state, actual ground truth
+(100 Hz), available sensor outputs (physics sampling rate), physics/app config
+snapshots (1 Hz), and renderer counters (1 Hz). Images retain original frame/source
+identity in a paired metadata channel. Diagnostic streams use existing endpoints;
+none feed ground truth into the app controller or change clipping behavior.
+
+Generate an offline report without modifying any flight settings:
+
+```bash
+uv run --locked --all-packages --all-extras --all-groups python -m mcap_bagger.report \
+  recordings/<flight>.mcap --output /tmp/flight-analysis --csv
+```
+
+Open `/tmp/flight-analysis/report.html`. It identifies the first recorded
+`clipped_target`, the exact rejected image when available, nearby images, commands,
+wind, sensor errors and ages. `report.json` keeps the analysis window and source
+stamps; optional `telemetry.csv` flattens the same window. Legacy files work but
+report missing identity/diagnostics rather than guessing an exact image match.

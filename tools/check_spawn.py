@@ -45,6 +45,8 @@ def main():
                 topic['endpoint'] = transport['control_endpoint']
             elif topic['key'] == 'flight/drone_1/rc':
                 topic['endpoint'] = transport['flight_command_endpoint']
+            elif topic['key'] == 'analysis/render/health':
+                topic['endpoint'] = transport['image_endpoint']
             elif 'endpoint' in topic:
                 topic['endpoint'] = app_endpoint
         recorder_path = temp / 'recorder.yaml'
