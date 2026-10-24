@@ -560,3 +560,28 @@ and back in (or reboot). Verify the new session with `prime-select query`,
 physical display wiring can still require an Intel output sink. Re-run the camera
 timing/flight checks after changing the session; launch flags cannot certify that
 system-level presentation latency is fixed.
+
+## Live wind and windsock
+
+In the external-RC/LOS workflow, **Wind** beside **Scenario** toggles a separate
+settings panel. Opening it does not send a command. Edit enabled state, world XYZ
+mean velocity in m/s (+Z up), correlated gust XYZ standard deviation in m/s,
+positive correlation time in seconds and integer seed, then **Apply wind**.
+The vector points downstream, toward air travel. Standard deviation is statistical
+variation, not a gust limit. Applied mean and current mean-plus-gust air velocity
+come from physics, using existing ports and ownership/retry checks.
+
+Apply works running or stopped; stopped edits do not advance time. Mean/gust/tau
+edits preserve gust history; seed or enable/mode changes restart it. Start/Reset
+and spawn changes keep settings and restart gusts. Physics restart reloads YAML;
+GUI changes are not saved. Other physics examples display unavailable controls.
+
+A procedural 3 m pole and 2 m windsock sits beside the confirmed spawn, +8 m
+world Y, grounded on the visual terrain. It follows the full authoritative wind
+vector, hangs down below 0.1 m/s and turns gray with “Wind unavailable” on stale
+readback. It uses spectator layer 2 with no collision or shadows and is excluded
+from the drone camera. Godot generates neither wind physics nor random gusts.
+
+Checks: `godot --headless --path godot --script test_wind.gd`,
+`./tools/run_godot.sh --path godot --script test_wind_scene.gd` (display required),
+and `uv run --locked --no-sync pytest -q tests/test_native_adapter.py tests/test_live_wind_pipeline.py`.

@@ -2,6 +2,8 @@ extends Node3D
 
 const Frames = preload("res://frames.gd")
 const SpawnPanel = preload("res://spawn_panel.gd")
+const WindPanel = preload("res://wind_panel.gd")
+const Windsock = preload("res://windsock.gd")
 const TruckCollision = preload("res://truck_collision.gd")
 const COLLISION_RETRY_MS := 100
 const COLLISION_ACK_TIMEOUT_MS := 1000
@@ -12,6 +14,9 @@ const STALE_MS := 1000
 const TRUCK_POSITION_M := Vector2(0.0, -50.0)
 const TRUCK_CLEARANCE_M := 6.0
 var spawn_panel: PanelContainer
+var wind_panel: PanelContainer
+var windsock: Node3D
+var wind_spawn_position: Array = []
 var collision_detector: RefCounted
 var pending_collision: Dictionary = {}
 var collision_started_ms := 0
@@ -68,6 +73,7 @@ func _ready() -> void:
 	adapter = ZmqCameraAdapter.new()
 	add_child(adapter)
 	spawn_panel.setup(self, spectator, adapter)
+	wind_panel.adapter = adapter
 	if not capture_only:
 		var transport_path := ProjectSettings.globalize_path(transport_config_path)
 		if not adapter.start(transport_path):
@@ -352,11 +358,28 @@ func _ui() -> void:
 	var scenario_button := Button.new()
 	scenario_button.text = "Scenario"
 	scenario_button.custom_minimum_size = Vector2(100, 48)
-	scenario_button.pressed.connect(func(): spawn_panel.visible = not spawn_panel.visible)
+	scenario_button.pressed.connect(func():
+		spawn_panel.visible = not spawn_panel.visible
+		wind_panel.hide())
 	toolbar.add_child(scenario_button)
+	wind_panel = WindPanel.new()
+	canvas.add_child(wind_panel)
+	wind_panel.hide()
+	var wind_button := Button.new()
+	wind_button.name = "WindButton"
+	wind_button.text = "Wind"
+	wind_button.custom_minimum_size = Vector2(100, 48)
+	wind_button.accessibility_name = "Wind settings"
+	wind_button.pressed.connect(func():
+		wind_panel.visible = not wind_panel.visible
+		spawn_panel.hide())
+	toolbar.add_child(wind_button)
+	windsock = Windsock.new()
+	add_child(windsock)
+	windsock.place_at_spawn([0., 0., 0.], height_at)
 
 func _send_control(action: String) -> void:
-	if not spawn_panel.pending.is_empty() and action != "stop":
+	if (not spawn_panel.pending.is_empty() or not wind_panel.pending.is_empty()) and action != "stop":
 		return
 	if adapter == null or not adapter.publish_control(action):
 		control_notice = "Could not send command"
@@ -374,7 +397,13 @@ func _update_controls() -> void:
 	control_buttons.reset.disabled = not ready
 	var spawn: Dictionary = {} if capture_only or adapter == null else adapter.get_spawn_state()
 	spawn_panel.update_state(state, spawn, "" if adapter == null else String(adapter.get_stats().controller_id))
-	if not spawn_panel.pending.is_empty():
+	var wind: Dictionary = {} if capture_only or adapter == null else adapter.get_wind_state()
+	wind_panel.update_state(state, wind, "" if adapter == null else String(adapter.get_stats().controller_id))
+	windsock.update_wind(wind)
+	if not spawn.is_empty() and spawn.position_m != wind_spawn_position:
+		wind_spawn_position = spawn.position_m.duplicate()
+		windsock.place_at_spawn(wind_spawn_position, height_at)
+	if not spawn_panel.pending.is_empty() or not wind_panel.pending.is_empty():
 		control_buttons.start.disabled = true
 		control_buttons.reset.disabled = true
 	control_display = String(state.state).to_upper() if connected else "DISCONNECTED"

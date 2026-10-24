@@ -17,6 +17,8 @@ public:
     godot::Dictionary get_stats() const;
     godot::Dictionary poll_collision_pose();
     bool publish_collision(const godot::Dictionary &report);
+    bool publish_wind(const godot::Dictionary &request);
+    godot::Dictionary get_wind_state();
     bool publish_spawn(const godot::Dictionary &request);
     godot::Dictionary get_spawn_state();
     bool publish_control(const godot::String &action);
