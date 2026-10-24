@@ -614,3 +614,23 @@ Open `/tmp/flight-analysis/report.html`. It identifies the first recorded
 wind, sensor errors and ages. `report.json` keeps the analysis window and source
 stamps; optional `telemetry.csv` flattens the same window. Legacy files work but
 report missing identity/diagnostics rather than guessing an exact image match.
+
+### Configure the MCAP directory
+
+**Bullet: Run all** now reads `../bullet_app/configs/app.json`. Its
+`recording.output_dir` controls future MCAP files only, with relative paths based
+on the app configuration file. The supplied configuration uses `../recordings/` in the shared workspace.
+The recorder YAML's output directory remains the standalone-recorder fallback.
+
+From this directory, use a different destination for one launch:
+
+```bash
+uv run --locked --all-packages --all-extras --all-groups python tools/run_flight.py \
+  --mcap-output-dir /data/flights
+```
+
+`--app-config PATH` selects a different app configuration; the CLI directory wins
+over the file and is working-directory-relative. Absolute paths and `~` work.
+The recorder creates/checks the directory before readiness. Any failure aborts
+launch before Godot, physics and app start. Logs remain under
+`recordings/launch_<UTC>/`; filenames, episode recording and shutdown are unchanged.

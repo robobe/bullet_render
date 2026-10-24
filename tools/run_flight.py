@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+from bullet_app.recording_config import DEFAULT_APP_CONFIG, load_recording_output
 
 ROOT = Path(__file__).resolve().parents[1]
 READY_TIMEOUT_S = 15
@@ -27,7 +28,9 @@ def copy_log(pipe, path, name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument('--app-config', type=Path, default=DEFAULT_APP_CONFIG, help='App JSON configuration, including recording.output_dir')
+    parser.add_argument('--mcap-output-dir', help='Override MCAP directory for this launch; relative to the working directory')
+    args = parser.parse_args()
     session = ROOT / 'recordings' / ('launch_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
     session.mkdir(parents=True)
     environment = dict(os.environ, PYTHONUNBUFFERED='1', BULLET_LAUNCH_ID=session.name)
@@ -47,7 +50,9 @@ def main():
     result = 0
     try:
         print(f'Flight process logs: {session}', flush=True)
-        recorder = launch('recorder', [sys.executable, '-m', 'mcap_bagger.cli', '--config', str(ROOT / 'configs/recorder.yaml'), '--ready-file', str(session / 'recorder.ready')], ROOT.parent / 'mcap_bagger')
+        output_dir = load_recording_output(args.app_config, output_dir=args.mcap_output_dir)
+        print(f'MCAP output directory: {output_dir}', flush=True)
+        recorder = launch('recorder', [sys.executable, '-m', 'mcap_bagger.cli', '--config', str(ROOT / 'configs/recorder.yaml'), '--output-dir', str(output_dir), '--ready-file', str(session / 'recorder.ready')], ROOT.parent / 'mcap_bagger')
         deadline = time.monotonic() + READY_TIMEOUT_S
         while not (session / 'recorder.ready').exists():
             if recorder.poll() is not None or time.monotonic() >= deadline:
