@@ -625,7 +625,7 @@ the app sends RC and reads attitude, altitude and status over MSP TCP port 5761.
 Godot continues to render physical ground truth. `analysis/app/msp` records the
 firmware estimates, status, host receipt times and RC-link counters in MCAP.
 
-The selected `../bullet_drone/configs/basic.yaml` currently uses `betaflight`, so
+The workspace tasks select `../config/basic.yaml`, which currently uses `betaflight`, so
 the normal tasks start firmware. Set its backend to `internal` to use the native
 simulation controller. SITL failures and firmware stdout are saved in the
 launch's `sitl.log`.

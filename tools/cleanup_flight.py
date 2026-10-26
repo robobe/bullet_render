@@ -21,7 +21,8 @@ def process_kind(arguments, cwd, workspace=WORKSPACE):
         return None
     if 'tools/run_flight.py' in joined and Path(cwd).resolve() == Path(workspace) / 'bullet_render':
         return 'launcher'
-    if '-m\0examples.external_rc.main' in joined and f'{workspace}/bullet_drone/configs/' in joined:
+    physics_configs = (f'{workspace}/config/', f'{workspace}/bullet_drone/configs/')
+    if '-m\0examples.external_rc.main' in joined and any(path in joined for path in physics_configs):
         return 'physics'
     if '-m\0mcap_bagger.cli' in joined and f'{workspace}/bullet_render/configs/recorder.yaml' in joined:
         return 'recorder'
