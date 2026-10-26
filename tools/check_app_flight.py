@@ -6,6 +6,7 @@ import argparse
 from contextlib import ExitStack
 import json
 from math import degrees, isclose
+import os
 from pathlib import Path
 import signal
 import subprocess
@@ -17,6 +18,8 @@ import yaml
 import zmq
 from bullet_msgs.flight import MISSION_TOPIC, FEEDBACK_TOPIC
 from bullet_msgs.los import LOS_TOPIC, validate_los
+from bullet_drone.config import YamlConfigLoader
+from sitl_supervisor import SitlSupervisor
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,10 +29,13 @@ BIN = ROOT.parent / '.venv/bin'
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report-dir', type=Path, default=Path('/tmp/bullet-app-flight'))
+    parser.add_argument('--physics-config', type=Path)
     parser.add_argument('--yaw-search', choices=('found', 'empty'), help='Search with the target behind the spawn, or hide it for a full circle')
     args = parser.parse_args()
     args.report_dir.mkdir(parents=True, exist_ok=True)
     processes = []
+    supervisor = None
+    environment = dict(os.environ)
     with tempfile.TemporaryDirectory(prefix='bullet-flight-') as temp, ExitStack() as stack, zmq.Context() as context:
         temp = Path(temp)
         # Reserve separate test ports; default workspace services are left untouched.
@@ -60,7 +66,7 @@ def main():
         sequence = 0
         def launch(name, cmd, cwd):
             log = stack.enter_context((args.report_dir / f'{name}.log').open('w'))
-            p = subprocess.Popen(cmd, cwd=cwd, stdout=log, stderr=subprocess.STDOUT)
+            p = subprocess.Popen(cmd, cwd=cwd, env=environment, stdout=log, stderr=subprocess.STDOUT)
             processes.append(p)
             return p
         def snapshot():
@@ -103,8 +109,16 @@ def main():
             pending.write_text(json.dumps(dict(sequence=sequence, action=action, **kwargs)))
             pending.replace(command_path)
         try:
+            if args.physics_config is not None and YamlConfigLoader().load(args.physics_config).control.backend == 'betaflight':
+                supervisor = SitlSupervisor(ROOT.parent / 'bullet_drone/.sitl/betaflight-source/obj/main/betaflight_SITL.elf',
+                                            ROOT.parent / 'bullet_drone/configs/betaflight.config', args.report_dir / 'sitl-session')
+                supervisor.start()
+                environment['BULLET_SITL_CONTROL'] = supervisor.endpoint
             launch('recorder', [str(BIN / 'mcap-bagger'), '--config', str(temp / 'recorder.yaml')], ROOT.parent / 'mcap_bagger')
-            physics = launch('physics', [str(BIN / 'python'), '-m', 'examples.external_rc.main', '--render-config', str(temp / 'physics.json')], ROOT.parent / 'bullet_drone')
+            physics_command = [str(BIN / 'python'), '-m', 'examples.external_rc.main', '--render-config', str(temp / 'physics.json')]
+            if args.physics_config is not None:
+                physics_command += ['--config', str(args.physics_config.resolve())]
+            physics = launch('physics', physics_command, ROOT.parent / 'bullet_drone')
             app = launch('app', [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
                                 '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
             # Probe supports a transport override after the command/state paths.
@@ -279,6 +293,8 @@ def main():
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(5)
+            if supervisor is not None:
+                supervisor.close()
 
 
 if __name__ == '__main__':

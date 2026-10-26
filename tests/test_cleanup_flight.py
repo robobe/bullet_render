@@ -18,6 +18,8 @@ def test_only_processes_from_this_workspace_are_selected():
                     '/home/user/workspaces/bullet/bullet_drone/configs/basic.yaml') == 'physics'
     assert classify(python, '-m', 'examples.external_rc.main', '--config',
                     '/home/user/workspaces/bullet/config/basic.yaml') == 'physics'
+    assert classify(python, '-m', 'examples.external_rc.main', '--config', '../config/basic.yaml',
+                    cwd='/home/user/workspaces/bullet/bullet_drone') == 'physics'
     assert classify(python, '-m', 'mcap_bagger.cli', '--config',
                     '/home/user/workspaces/bullet/bullet_render/configs/recorder.yaml') == 'recorder'
     assert classify('/home/user/workspaces/bullet/.venv/bin/bullet-app', '--transport-config',
