@@ -17,7 +17,9 @@ def test_recorded_launcher_order_logs_and_shutdown(tmp_path,monkeypatch):
     app_config=tmp_path/'app.json'
     app_config.write_text(json.dumps({'recording':{'output_dir':'mcaps'}}))
     override=tmp_path/'custom MCAP output'
-    monkeypatch.setattr(module.sys,'argv',['run_flight','--app-config',str(app_config),'--mcap-output-dir',str(override)])
+    mission_config=tmp_path/'betaflight.json'
+    monkeypatch.setattr(module.sys,'argv',['run_flight','--app-config',str(app_config),'--mcap-output-dir',str(override),
+                                           '--mission-config',str(mission_config)])
     monkeypatch.setattr(module.signal,'signal',lambda *args:None)
     monkeypatch.setattr(module.time,'sleep',lambda *args:None)
     launched=[]
@@ -38,6 +40,8 @@ def test_recorded_launcher_order_logs_and_shutdown(tmp_path,monkeypatch):
     assert 'mcap_bagger.cli' in launched[0][0]
     command=launched[0][0]
     assert command[command.index('--output-dir')+1]==str(override)
+    app_command=next(command for command,_ in launched if '--debug' in command)
+    assert app_command[app_command.index('--mission-config')+1]==str(mission_config)
     session=next((tmp_path/'bullet_render/recordings').iterdir())
     assert all((session/f'{name}.log').read_text()=='startup diagnostic\n' for name in ('recorder','godot','physics','app'))
     assert launched[0][1]['env']['BULLET_LAUNCH_ID']==session.name

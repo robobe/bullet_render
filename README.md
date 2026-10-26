@@ -373,8 +373,10 @@ Run `uv sync --locked --all-packages --all-extras --all-groups` in `../bullet_ap
 
 ## App flight verification
 
-The workspace task launches the app with `--mission-config
-../los_tracking/examples/bullet_profile.json`. Wait for app READY, then press
+The workspace task prompts for the navigator profile: choose
+`../los_tracking/examples/bullet_profile.json` for the usual LOS mission or
+`../config/betaflight.json` for the tuned Betaflight altitude loop. It saves
+MCAP files under `~/workspaces/bullet/recordings`. Wait for app READY, then press
 Godot Start: warmup, arm, climb 20 m relative to the initial barometer, settle
 for 3 s and wait for a fresh post-hover bbox before LOS. Missing bbox starts a
 15 deg/s yaw search for one measured full circle; expired RC or LOS faults freeze
@@ -625,6 +627,13 @@ the app sends RC and reads attitude, altitude and status over MSP TCP port 5761.
 Godot continues to render physical ground truth. `analysis/app/msp` records the
 firmware estimates, status, host receipt times and RC-link counters in MCAP.
 
+Run a hover-only check with `python tools/run_flight.py --physics-config
+../config/basic.yaml --hover-check`, then click Start in Godot. The app stops
+after 20 stable seconds at 20 m relative altitude. For an automated isolated
+SITL check and MCAP ground-truth envelope report, run
+`python tools/check_app_flight.py --physics-config ../config/basic.yaml
+--hover-check --report-dir /tmp/bullet-bf-hover`.
+
 The workspace tasks select `../config/basic.yaml`, which currently uses `betaflight`, so
 the normal tasks start firmware. Set its backend to `internal` to use the native
 simulation controller. SITL failures and firmware stdout are saved in the
@@ -655,3 +664,15 @@ over the file and is working-directory-relative. Absolute paths and `~` work.
 The recorder creates/checks the directory before readiness. Any failure aborts
 launch before Godot, physics and app start. Logs remain under
 `recordings/launch_<UTC>/`; filenames, episode recording and shutdown are unchanged.
+
+To check the normal mission with the workspace Betaflight tuning profile:
+
+```bash
+uv run --locked --all-packages --all-extras --all-groups python tools/check_app_flight.py \
+  --physics-config ../config/basic.yaml --mission-config ../config/betaflight.json \
+  --report-dir /tmp/bullet-betaflight-flight
+```
+
+The app prints MSP attitude request/response/publication/consumption rates once
+per second and records delivery timing in `analysis/app/msp.attitude_delivery`.
+The hover-check mode continues to select its dedicated profile.

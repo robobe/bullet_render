@@ -34,12 +34,20 @@ def main():
     parser.add_argument('--app-config', type=Path, default=DEFAULT_APP_CONFIG, help='App JSON configuration, including recording.output_dir')
     parser.add_argument('--mcap-output-dir', help='Override MCAP directory for this launch; relative to the working directory')
     parser.add_argument('--physics-config', type=Path, default=ROOT.parent / 'bullet_drone/configs/basic.yaml')
+    parser.add_argument('--mission-config', type=Path, help='Navigator profile; defaults to the LOS profile')
+    parser.add_argument('--hover-check', action='store_true', help='Stop after a stable 20-second hover')
     args = parser.parse_args()
     session = ROOT / 'recordings' / ('launch_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
     session.mkdir(parents=True)
     environment = dict(os.environ, PYTHONUNBUFFERED='1', BULLET_LAUNCH_ID=session.name)
     processes, threads = [], []
     supervisor = None
+    render_config = ROOT / 'configs/physics.json'
+    if args.hover_check:
+        render_profile = json.loads(render_config.read_text())
+        render_profile['fps'] = 10
+        render_config = session / 'hover-render.json'
+        render_config.write_text(json.dumps(render_profile, indent=2))
     def launch(name, command, cwd):
         process = subprocess.Popen(command, cwd=cwd, env=environment, start_new_session=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
@@ -70,8 +78,13 @@ def main():
             supervisor.start()
             environment['BULLET_SITL_CONTROL'] = supervisor.endpoint
         launch('godot', [str(ROOT / 'tools/run_godot.sh'), '--path', str(ROOT / 'godot')], ROOT)
-        launch('physics', [sys.executable, '-m', 'examples.external_rc.main', '--config', str(args.physics_config), '--render-config', str(ROOT / 'configs/physics.json')], ROOT.parent / 'bullet_drone')
-        launch('app', [str(Path(sys.executable).parent / 'bullet-app'), '--transport-config', str(ROOT / 'configs/transport.json'), '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json'), '--debug'], ROOT.parent / 'bullet_app')
+        launch('physics', [sys.executable, '-m', 'examples.external_rc.main', '--config', str(args.physics_config), '--render-config', str(render_config)], ROOT.parent / 'bullet_drone')
+        mission_config = (ROOT.parent / 'bullet_app/configs/betaflight_hover_profile.json' if args.hover_check
+                          else args.mission_config or ROOT.parent / 'los_tracking/examples/bullet_profile.json')
+        app_command = [str(Path(sys.executable).parent / 'bullet-app'), '--transport-config', str(ROOT / 'configs/transport.json'), '--mission-config', str(mission_config), '--debug']
+        if args.hover_check:
+            app_command.append('--hover-check')
+        launch('app', app_command, ROOT.parent / 'bullet_app')
         (session / 'processes.json').write_text(json.dumps({name: process.pid for name, process in processes}, indent=2))
         while all(process.poll() is None for _, process in processes):
             if supervisor is not None and supervisor.error:

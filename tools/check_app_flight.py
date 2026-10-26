@@ -5,6 +5,7 @@ Uses isolated ports and temporary recordings. Run from the shared environment.
 import argparse
 from contextlib import ExitStack
 import json
+from datetime import datetime, timezone
 from math import degrees, isclose
 import os
 from pathlib import Path
@@ -30,14 +31,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report-dir', type=Path, default=Path('/tmp/bullet-app-flight'))
     parser.add_argument('--physics-config', type=Path)
+    parser.add_argument('--mission-config', type=Path, help='Navigator profile for the normal mission check')
     parser.add_argument('--yaw-search', choices=('found', 'empty'), help='Search with the target behind the spawn, or hide it for a full circle')
+    parser.add_argument('--hover-check', action='store_true', help='Verify a stable Betaflight 20-second hover')
     args = parser.parse_args()
+    if args.hover_check and args.yaw_search:
+        parser.error('--hover-check cannot be combined with --yaw-search')
     args.report_dir.mkdir(parents=True, exist_ok=True)
+    recording_dir = (args.report_dir / ('recordings-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
+                     if args.hover_check else None)
     processes = []
     supervisor = None
     environment = dict(os.environ)
     with tempfile.TemporaryDirectory(prefix='bullet-flight-') as temp, ExitStack() as stack, zmq.Context() as context:
         temp = Path(temp)
+        if recording_dir is None:
+            recording_dir = temp / 'recordings'
         # Reserve separate test ports; default workspace services are left untouched.
         reservations = [context.socket(zmq.PUB) for _ in range(5)]
         ports = [s.bind_to_random_port('tcp://127.0.0.1') for s in reservations]
@@ -47,11 +56,13 @@ def main():
                              [f'tcp://127.0.0.1:{p}' for p in ports[:4]]))
         (temp / 'transport.json').write_text(json.dumps(transport))
         profile = json.loads((ROOT / 'configs/physics.json').read_text())
+        if args.hover_check:
+            profile['fps'] = 10
         profile['transport_config'] = str(temp / 'transport.json')
         (temp / 'physics.json').write_text(json.dumps(profile))
         app_endpoint = f'tcp://127.0.0.1:{ports[4]}'
         recorder = yaml.safe_load((ROOT / 'configs/recorder.yaml').read_text())
-        recorder.update(transport_config=str(temp / 'transport.json'), output_dir=str(temp / 'recordings'))
+        recorder.update(transport_config=str(temp / 'transport.json'), output_dir=str(recording_dir))
         for topic in recorder['topics']:
             if topic['key'] == 'render/drone_1/collision':
                 topic['endpoint'] = transport['control_endpoint']
@@ -99,6 +110,9 @@ def main():
                 pump()
                 if predicate():
                     return
+                if (latest.get(MISSION_TOPIC, {}).get('phase') == 'FAULT'
+                        and description != 'one measured full circle without detection'):
+                    raise AssertionError(f'unexpected mission fault: {latest[MISSION_TOPIC]}; MSP={latest.get(b"analysis/app/msp")}; inspect {args.report_dir}')
                 assert all(p.poll() is None for p in processes), f'component exited: {description}; statuses={[(p.args, p.poll()) for p in processes]}; inspect {args.report_dir}'
                 assert time.monotonic() < deadline, f'timed out: {description}; latest={latest.get(MISSION_TOPIC)}; snapshot={snapshot()}; inspect {args.report_dir}'
                 time.sleep(.01)
@@ -119,8 +133,13 @@ def main():
             if args.physics_config is not None:
                 physics_command += ['--config', str(args.physics_config.resolve())]
             physics = launch('physics', physics_command, ROOT.parent / 'bullet_drone')
-            app = launch('app', [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
-                                '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
+            mission_config = (ROOT.parent / 'bullet_app/configs/betaflight_hover_profile.json' if args.hover_check
+                              else (args.mission_config.resolve() if args.mission_config else ROOT.parent / 'los_tracking/examples/bullet_profile.json'))
+            app_command = [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
+                           '--bbox-endpoint', app_endpoint, '--mission-config', str(mission_config)]
+            if args.hover_check:
+                app_command.append('--hover-check')
+            app = launch('app', app_command, ROOT.parent / 'bullet_app')
             # Probe supports a transport override after the command/state paths.
             launch('godot', [str(ROOT / 'tools/run_godot.sh'), '--path', str(ROOT / 'godot'), '--script', 'control_probe.gd', '--',
                              str(command_path), str(state_path), str(temp / 'transport.json')], ROOT)
@@ -135,6 +154,62 @@ def main():
                 wait(lambda: latest.get(MISSION_TOPIC, {}).get('episode_id') == snapshot()['spawn']['episode_id'], 'app sees selected episode')
             time.sleep(.2)
             command('start')
+            if args.hover_check:
+                wait(lambda: latest.get(MISSION_TOPIC, {}).get('phase') == 'COMPLETED',
+                     'stable 20-second hover completes', timeout=100)
+                status = latest[MISSION_TOPIC]
+                assert status['reason'] == 'hover_complete', status
+                assert all(phase not in phases for phase in ('WAIT_TARGET', 'YAW_SEARCH', 'LOS_APPROACH')), phases
+                wait(lambda: latest.get(FEEDBACK_TOPIC, {}).get('state') == 'stopped', 'hover completion freezes physics')
+                frozen = latest[FEEDBACK_TOPIC]['source']['step_index']
+                time.sleep(.3)
+                pump()
+                assert latest[FEEDBACK_TOPIC]['source']['step_index'] == frozen
+                wait(lambda: bool(list(recording_dir.glob('*.mcap')))
+                     and not list(recording_dir.glob('*.partial')), 'hover MCAP finalized')
+                truth, mission_rows = [], []
+                for path in recording_dir.glob('*.mcap'):
+                    with path.open('rb') as stream:
+                        for _, channel, message in make_reader(stream).iter_messages(
+                                topics=['analysis/physics/ground_truth', 'app/drone_1/mission']):
+                            packet = json.loads(message.data)
+                            if channel.topic == 'analysis/physics/ground_truth':
+                                truth.append(packet)
+                            else:
+                                mission_rows.append(packet)
+                completed = [p for p in mission_rows if p['phase'] == 'COMPLETED' and p['reason'] == 'hover_complete']
+                held = [p for p in mission_rows if p['phase'] == 'HOVER']
+                takeoff = [p for p in mission_rows if p['phase'] == 'TAKEOFF']
+                assert completed and held and takeoff and len(truth) > 1000
+                end_s = completed[0]['simulation_time_s']
+                episode = completed[0]['episode_id']
+                takeoff_times = [p['simulation_time_s'] for p in takeoff
+                                 if p['episode_id'] == episode and p['simulation_time_s'] < end_s]
+                takeoff_s = min(takeoff_times)
+                last_takeoff_s = max(takeoff_times)
+                start_s = min(p['simulation_time_s'] for p in held
+                              if p['episode_id'] == episode and last_takeoff_s <= p['simulation_time_s'] < end_s)
+                initial = next(p['ground_truth']['position_m'][2] for p in sorted(
+                    truth, key=lambda item: item['source']['simulation_time_s'])
+                    if p['source']['episode_id'] == episode and p['source']['simulation_time_s'] >= takeoff_s)
+                altitudes = [p['ground_truth']['position_m'][2] - initial for p in truth
+                             if p['source']['episode_id'] == episode
+                             and start_s <= p['source']['simulation_time_s'] <= end_s]
+                assert end_s - start_s >= 20.0, (start_s, end_s)
+                errors = [altitude - 20.0 for altitude in altitudes]
+                peak_error = max(abs(error) for error in errors)
+                peak_to_peak = max(altitudes) - min(altitudes)
+                rms_error = (sum(error * error for error in errors) / len(errors)) ** .5
+                assert peak_error <= .5, dict(peak_error_m=peak_error, peak_to_peak_m=peak_to_peak,
+                                               rms_error_m=rms_error, samples=len(altitudes))
+                report = dict(phases=phases, relative_target_m=20., hold_duration_s=end_s - start_s,
+                              takeoff_start_altitude_m=initial,
+                              peak_error_m=peak_error, peak_to_peak_m=peak_to_peak,
+                              rms_error_m=rms_error, samples=len(altitudes), final_state=latest[FEEDBACK_TOPIC]['state'],
+                              final_reason=latest[FEEDBACK_TOPIC]['reason'], frozen_step=frozen)
+                (args.report_dir / 'report.json').write_text(json.dumps(report, indent=2))
+                print(json.dumps(report, indent=2))
+                return
             if args.yaw_search:
                 wait(lambda: latest.get(MISSION_TOPIC, {}).get('phase') == 'YAW_SEARCH', 'yaw search begins after hover', timeout=60)
                 assert 'LOS_ACQUIRE' not in phases and 'LOS_APPROACH' not in phases, phases
@@ -211,7 +286,7 @@ def main():
             wait(lambda: latest.get(FEEDBACK_TOPIC, {}).get('reason') == 'app_not_ready', 'Start rejected without app')
             old_episode = latest[FEEDBACK_TOPIC]['source']['episode_id']
             launch('app-restarted', [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
-                                    '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
+                                    '--bbox-endpoint', app_endpoint, '--mission-config', str(mission_config)], ROOT.parent / 'bullet_app')
             wait(lambda: latest.get(MISSION_TOPIC, {}).get('phase') == 'READY' and latest[MISSION_TOPIC]['app_id'] != prior_app_id, 'restarted app ready')
             time.sleep(.2)
             pump()
