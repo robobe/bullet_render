@@ -2,6 +2,7 @@
 from importlib.util import spec_from_file_location, module_from_spec
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 import json
 
 import pytest
@@ -11,6 +12,7 @@ def test_recorded_launcher_order_logs_and_shutdown(tmp_path,monkeypatch):
     spec=spec_from_file_location('run_flight',Path(__file__).resolve().parents[1]/'tools/run_flight.py')
     module=module_from_spec(spec)
     spec.loader.exec_module(module)
+    monkeypatch.setattr(module.YamlConfigLoader, "load", lambda self, path: SimpleNamespace(control=SimpleNamespace(backend="internal")))
     monkeypatch.setattr(module,'ROOT',tmp_path/'bullet_render')
     app_config=tmp_path/'app.json'
     app_config.write_text(json.dumps({'recording':{'output_dir':'mcaps'}}))
@@ -47,6 +49,7 @@ def test_recorder_or_config_failure_never_launches_flight_services(tmp_path,monk
     spec=spec_from_file_location('run_flight',Path(__file__).resolve().parents[1]/'tools/run_flight.py')
     module=module_from_spec(spec)
     spec.loader.exec_module(module)
+    monkeypatch.setattr(module.YamlConfigLoader, "load", lambda self, path: SimpleNamespace(control=SimpleNamespace(backend="internal")))
     monkeypatch.setattr(module,'ROOT',tmp_path/'bullet_render')
     config=tmp_path/'app.json'
     config.write_text('{bad json' if failure=='config' else json.dumps({'recording':{'output_dir':'blocked'}}))

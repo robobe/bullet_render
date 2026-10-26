@@ -9,6 +9,9 @@ import subprocess
 import sys
 import threading
 import time
+from bullet_drone.config import YamlConfigLoader
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sitl_supervisor import SitlSupervisor
 from bullet_app.recording_config import DEFAULT_APP_CONFIG, load_recording_output
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,11 +33,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app-config', type=Path, default=DEFAULT_APP_CONFIG, help='App JSON configuration, including recording.output_dir')
     parser.add_argument('--mcap-output-dir', help='Override MCAP directory for this launch; relative to the working directory')
+    parser.add_argument('--physics-config', type=Path, default=ROOT.parent / 'bullet_drone/configs/basic.yaml')
     args = parser.parse_args()
     session = ROOT / 'recordings' / ('launch_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
     session.mkdir(parents=True)
     environment = dict(os.environ, PYTHONUNBUFFERED='1', BULLET_LAUNCH_ID=session.name)
     processes, threads = [], []
+    supervisor = None
     def launch(name, command, cwd):
         process = subprocess.Popen(command, cwd=cwd, env=environment, start_new_session=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
@@ -58,11 +63,19 @@ def main():
             if recorder.poll() is not None or time.monotonic() >= deadline:
                 raise RuntimeError('Recorder did not become ready; inspect recorder.log')
             time.sleep(.05)
+        physics_config = YamlConfigLoader().load(args.physics_config)
+        if physics_config.control.backend == 'betaflight':
+            supervisor = SitlSupervisor(ROOT.parent / 'bullet_drone/.sitl/betaflight-source/obj/main/betaflight_SITL.elf',
+                                        ROOT.parent / 'bullet_drone/configs/betaflight.config', session)
+            supervisor.start()
+            environment['BULLET_SITL_CONTROL'] = supervisor.endpoint
         launch('godot', [str(ROOT / 'tools/run_godot.sh'), '--path', str(ROOT / 'godot')], ROOT)
-        launch('physics', [sys.executable, '-m', 'examples.external_rc.main', '--config', str(ROOT.parent / 'bullet_drone/configs/basic.yaml'), '--render-config', str(ROOT / 'configs/physics.json')], ROOT.parent / 'bullet_drone')
+        launch('physics', [sys.executable, '-m', 'examples.external_rc.main', '--config', str(args.physics_config), '--render-config', str(ROOT / 'configs/physics.json')], ROOT.parent / 'bullet_drone')
         launch('app', [str(Path(sys.executable).parent / 'bullet-app'), '--transport-config', str(ROOT / 'configs/transport.json'), '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json'), '--debug'], ROOT.parent / 'bullet_app')
         (session / 'processes.json').write_text(json.dumps({name: process.pid for name, process in processes}, indent=2))
         while all(process.poll() is None for _, process in processes):
+            if supervisor is not None and supervisor.error:
+                raise RuntimeError(supervisor.error)
             time.sleep(.1)
         result = next((p.returncode for _, p in processes if p.returncode), 0)
     except KeyboardInterrupt:
@@ -87,6 +100,8 @@ def main():
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
+        if supervisor is not None:
+            supervisor.close()
         for thread in threads:
             thread.join()
     return result

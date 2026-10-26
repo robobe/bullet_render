@@ -615,6 +615,27 @@ wind, sensor errors and ages. `report.json` keeps the analysis window and source
 stamps; optional `telemetry.csv` flattens the same window. Legacy files work but
 report missing identity/diagnostics rather than guessing an exact image match.
 
+### Betaflight SITL backend
+
+Set `control.backend: betaflight` in the selected physics YAML and first run
+`../bullet_drone/tools/setup_betaflight_sitl.sh`. The normal `run_flight.py`
+launcher then owns the pinned firmware process, restarts it for each episode and
+passes its private control endpoint to physics. Physics exchanges FDM/motor UDP;
+the app sends RC and reads attitude, altitude and status over MSP TCP port 5761.
+Godot continues to render physical ground truth. `analysis/app/msp` records the
+firmware estimates, status, host receipt times and RC-link counters in MCAP.
+
+The selected `../bullet_drone/configs/basic.yaml` currently uses `betaflight`, so
+the normal tasks start firmware. Set its backend to `internal` to use the native
+simulation controller. SITL failures and firmware stdout are saved in the
+launch's `sitl.log`.
+
+The VS Code **Bullet: Run all** tasks first run `python3 tools/cleanup_flight.py`.
+It gracefully stops stale launcher, renderer, app, physics, recorder and pinned
+SITL processes from this workspace, then verifies the flight ports are free. It
+does not terminate similarly named processes from another checkout. Use
+`python3 tools/cleanup_flight.py --dry-run` to inspect what it would stop.
+
 ### Configure the MCAP directory
 
 **Bullet: Run all** now reads `../bullet_app/configs/app.json`. Its

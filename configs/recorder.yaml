@@ -160,6 +160,13 @@ topics:
     schema: bullet_msgs:analysis_config.json
     # Unix arrival clock; simulation/monotonic clocks stay in payload.
     timestamp_source: receive
+  # Betaflight estimator, status and RC-link health sampled by bullet_app at 20 Hz.
+  - key: analysis/app/msp
+    input: json
+    endpoint: tcp://127.0.0.1:5558
+    schema: bullet_msgs:analysis_msp.json
+    # Values use independent host-receipt times because MSP has no source timestamps.
+    timestamp_source: receive
   # Renderer counters and capture age, sampled at 1 Hz on the image publisher.
   - key: analysis/render/health
     # JSON uses a separate exact subscription from SHM image descriptors.
