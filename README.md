@@ -322,7 +322,7 @@ Start the camera/bbox preview (or use workspace **Bullet: App (debug)**):
 ```bash
 cd ../bullet_app
 uv run --locked --all-packages --all-extras --all-groups bullet-app --transport-config ../bullet_render/configs/transport.json \
-  --mission-config ../los_tracking/examples/bullet_profile.json --debug
+  --mission-config ../los_tracking/examples/bullet_profile.yaml --debug
 ```
 
 The app supports one exact topic per process, dimensions from descriptors,
@@ -374,8 +374,8 @@ Run `uv sync --locked --all-packages --all-extras --all-groups` in `../bullet_ap
 ## App flight verification
 
 The workspace task prompts for the navigator profile: choose
-`../los_tracking/examples/bullet_profile.json` for the usual LOS mission or
-`../config/betaflight.json` for the tuned Betaflight altitude loop. It saves
+`../los_tracking/examples/bullet_profile.yaml` for the usual LOS mission or
+`../config/betaflight_los.yaml` for the tuned Betaflight altitude loop. It saves
 MCAP files under `~/workspaces/bullet/recordings`. Wait for app READY, then press
 Godot Start: warmup, arm, climb 20 m relative to the initial barometer, settle
 for 3 s and wait for a fresh post-hover bbox before LOS. Missing bbox starts a
@@ -669,7 +669,7 @@ To check the normal mission with the workspace Betaflight tuning profile:
 
 ```bash
 uv run --locked --all-packages --all-extras --all-groups python tools/check_app_flight.py \
-  --physics-config ../config/basic.yaml --mission-config ../config/betaflight.json \
+  --physics-config ../config/basic.yaml --mission-config ../config/betaflight_los.yaml \
   --report-dir /tmp/bullet-betaflight-flight
 ```
 

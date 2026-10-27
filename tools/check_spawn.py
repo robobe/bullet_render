@@ -98,7 +98,7 @@ def main():
             launch('recorder', [str(BIN / 'mcap-bagger'), '--config', str(recorder_path)], ROOT.parent / 'mcap_bagger')
             launch('physics', [str(BIN / 'python'), '-m', 'examples.external_rc.main', '--render-config', str(physics_path)], ROOT.parent / 'bullet_drone')
             launch('app', [str(BIN / 'bullet-app'), '--transport-config', str(transport_path), '--bbox-endpoint', app_endpoint,
-                           '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
+                           '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.yaml')], ROOT.parent / 'bullet_app')
             godot = launch('godot', [str(ROOT / 'tools/run_godot.sh'), '--path', str(ROOT / 'godot'), '--script', 'control_probe.gd', '--',
                                     str(command_path), str(report_path), str(transport_path)], ROOT)
             wait(lambda: bool(current()) and not snapshot().get('disabled', {}).get('start', True), 'spawn capability and app ready')

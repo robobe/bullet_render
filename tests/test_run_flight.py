@@ -17,7 +17,7 @@ def test_recorded_launcher_order_logs_and_shutdown(tmp_path,monkeypatch):
     app_config=tmp_path/'app.json'
     app_config.write_text(json.dumps({'recording':{'output_dir':'mcaps'}}))
     override=tmp_path/'custom MCAP output'
-    mission_config=tmp_path/'betaflight.json'
+    mission_config=tmp_path/'betaflight.yaml'
     monkeypatch.setattr(module.sys,'argv',['run_flight','--app-config',str(app_config),'--mcap-output-dir',str(override),
                                            '--mission-config',str(mission_config)])
     monkeypatch.setattr(module.signal,'signal',lambda *args:None)

@@ -79,8 +79,8 @@ def main():
             environment['BULLET_SITL_CONTROL'] = supervisor.endpoint
         launch('godot', [str(ROOT / 'tools/run_godot.sh'), '--path', str(ROOT / 'godot')], ROOT)
         launch('physics', [sys.executable, '-m', 'examples.external_rc.main', '--config', str(args.physics_config), '--render-config', str(render_config)], ROOT.parent / 'bullet_drone')
-        mission_config = (ROOT.parent / 'bullet_app/configs/betaflight_hover_profile.json' if args.hover_check
-                          else args.mission_config or ROOT.parent / 'los_tracking/examples/bullet_profile.json')
+        mission_config = (ROOT.parent / 'bullet_app/configs/betaflight_hover_profile.yaml' if args.hover_check
+                          else args.mission_config or ROOT.parent / 'los_tracking/examples/bullet_profile.yaml')
         app_command = [str(Path(sys.executable).parent / 'bullet-app'), '--transport-config', str(ROOT / 'configs/transport.json'), '--mission-config', str(mission_config), '--debug']
         if args.hover_check:
             app_command.append('--hover-check')

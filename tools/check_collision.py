@@ -111,7 +111,7 @@ def main():
             wait(lambda: trajectory_path.exists(), 'Godot trajectory ready')
             physics = launch('physics', [str(BIN / 'python'), str(ROOT / 'tools/collision_physics_probe.py'), str(temp / 'physics.json'), str(trajectory_path), *(['--reject-collisions'] if args.reject_collisions else [])], ROOT.parent / 'bullet_drone')
             app = launch('app', [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
-                                '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
+                                '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.yaml')], ROOT.parent / 'bullet_app')
             wait(lambda: latest.get(MISSION_TOPIC, {}).get('phase') == 'READY' and snapshot().get('state', {}).get('state') == 'stopped' and not snapshot().get('disabled', {}).get('start', True), 'ready')
             time.sleep(.2)
             command('start')
@@ -154,7 +154,7 @@ def main():
             assert latest[FEEDBACK_TOPIC]['reason'] == 'target_hit'
             assert latest[FEEDBACK_TOPIC]['source']['step_index'] == frozen
             launch('app-restarted', [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
-                                    '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.json')], ROOT.parent / 'bullet_app')
+                                    '--bbox-endpoint', app_endpoint, '--mission-config', str(ROOT.parent / 'los_tracking/examples/bullet_profile.yaml')], ROOT.parent / 'bullet_app')
             wait(lambda: latest.get(MISSION_TOPIC, {}).get('phase') == 'COMPLETED' and latest[MISSION_TOPIC]['app_id'] != prior_app_id, 'late app recovers completion')
             assert latest[FEEDBACK_TOPIC]['source']['step_index'] == frozen
             command('reset')
