@@ -133,8 +133,9 @@ def main():
             if args.physics_config is not None:
                 physics_command += ['--config', str(args.physics_config.resolve())]
             physics = launch('physics', physics_command, ROOT.parent / 'bullet_drone')
-            mission_config = (ROOT.parent / 'bullet_app/configs/betaflight_hover_profile.yaml' if args.hover_check
-                              else (args.mission_config.resolve() if args.mission_config else ROOT.parent / 'los_tracking/examples/bullet_profile.yaml'))
+            mission_config = (args.mission_config.resolve() if args.mission_config else
+                              ROOT.parent / ('bullet_app/configs/betaflight_hover_profile.yaml' if args.hover_check
+                                             else 'los_tracking/examples/bullet_profile.yaml'))
             app_command = [str(BIN / 'bullet-app'), '--transport-config', str(temp / 'transport.json'),
                            '--bbox-endpoint', app_endpoint, '--mission-config', str(mission_config)]
             if args.hover_check:

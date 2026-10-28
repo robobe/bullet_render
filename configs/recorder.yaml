@@ -167,6 +167,16 @@ topics:
     schema: bullet_msgs:analysis_msp.json
     # Values use independent host-receipt times because MSP has no source timestamps.
     timestamp_source: receive
+  # Every RC frame successfully written to the MSP transport, normally at 50 Hz.
+  - key: analysis/app/msp_rc
+    # JSON event published by the app's mission thread after it drains MSP deliveries.
+    input: json
+    # Existing application telemetry endpoint; no new socket is needed.
+    endpoint: tcp://127.0.0.1:5558
+    # Shared contract for the actual MSP-bound 18-channel PWM frame.
+    schema: bullet_msgs:analysis_msp_rc.json
+    # Unix MCAP arrival time; sent_at_us preserves the host-monotonic write time.
+    timestamp_source: receive
   # Renderer counters and capture age, sampled at 1 Hz on the image publisher.
   - key: analysis/render/health
     # JSON uses a separate exact subscription from SHM image descriptors.
