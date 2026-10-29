@@ -93,6 +93,23 @@ func _check() -> void:
 	root.get_texture().get_image().save_png("/tmp/bullet-render-scene.png")
 	scene.spectator.position = scene.truck.global_position + Vector3(9, 6, 11)
 	scene.spectator.look_at(scene.truck.global_position + Vector3.UP * 1.5)
+	var pan_start: Vector3 = scene.spectator_pan
+	var left_down := InputEventMouseButton.new()
+	left_down.button_index = MOUSE_BUTTON_LEFT
+	left_down.pressed = true
+	scene._unhandled_input(left_down)
+	var pan_motion := InputEventMouseMotion.new()
+	pan_motion.relative = Vector2(10, -20)
+	scene._unhandled_input(pan_motion)
+	assert(scene.spectator_pan.x > pan_start.x and scene.spectator_pan.y > pan_start.y, "left drag did not pan world X/Y")
+	var left_up := InputEventMouseButton.new()
+	left_up.button_index = MOUSE_BUTTON_LEFT
+	left_up.pressed = false
+	scene._unhandled_input(left_up)
+	var ignored_motion := InputEventMouseMotion.new()
+	ignored_motion.relative = Vector2(100, 100)
+	scene._unhandled_input(ignored_motion)
+	assert(scene.spectator_pan.x < 20.0 and scene.spectator_pan.y < 20.0, "released pan kept moving")
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("/tmp/bullet-render-truck-detail.png")
 	print("Scene normals, RGB/channel orientation, immediate pose/readback, FOV, UI exclusion and red truck at 50 m checks passed")

@@ -10,6 +10,9 @@ const COLLISION_ACK_TIMEOUT_MS := 1000
 const WORLD_SIZE := 500.0
 const GRID := 120
 const STALE_MS := 1000
+const SPECTATOR_PAN_SPEED_M_PER_PIXEL := 0.08
+const SPECTATOR_TARGET_Y_MIN_M := 0.0
+const SPECTATOR_TARGET_Y_MAX_M := 250.0
 # Horizontal metres from the physics origin, in Godot's X/Z ground plane.
 const TRUCK_POSITION_M := Vector2(0.0, -50.0)
 const TRUCK_CLEARANCE_M := 6.0
@@ -38,6 +41,8 @@ var noise := FastNoiseLite.new()
 var yaw := 0.7
 var pitch := 0.45
 var distance := 65.0
+var spectator_pan := Vector3.ZERO
+var pan_dragging := false
 var last_request := 0
 var total_frames := 0
 var fps_frames := 0
@@ -336,7 +341,7 @@ func _ui() -> void:
 	preview.texture = viewport.get_texture()
 	column.add_child(preview)
 	var hint := Label.new()
-	hint.text = "Right-drag to orbit   ·   Scroll to zoom   /   Truck contact ends the scenario"
+	hint.text = "Left-drag to move X/Y   ·   Right-drag to orbit   ·   Scroll to zoom   /   Truck contact ends the scenario"
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.position = Vector2(28, -108)
 	canvas.add_child(hint)
@@ -486,7 +491,8 @@ func _process(_delta: float) -> void:
 			return
 		if not request.is_empty():
 			_capture(request)
-	var target := drone.global_position
+	var target := drone.global_position + spectator_pan
+	target.y = clampf(target.y, SPECTATOR_TARGET_Y_MIN_M, SPECTATOR_TARGET_Y_MAX_M)
 	spectator.position = target + Vector3(sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)) * distance
 	spectator.look_at(target)
 	var now := Time.get_ticks_msec()
@@ -562,12 +568,19 @@ func _capture(request: Dictionary) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			pan_dragging = event.pressed
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if event.pressed else Input.MOUSE_MODE_VISIBLE
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			distance = maxf(2, distance * 0.85)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			distance = minf(650, distance * 1.15)
+	elif event is InputEventMouseMotion and pan_dragging:
+		spectator_pan.x += event.relative.x * SPECTATOR_PAN_SPEED_M_PER_PIXEL
+		spectator_pan.y -= event.relative.y * SPECTATOR_PAN_SPEED_M_PER_PIXEL
+		var target_y := drone.global_position.y + spectator_pan.y
+		spectator_pan.y = clampf(target_y, SPECTATOR_TARGET_Y_MIN_M, SPECTATOR_TARGET_Y_MAX_M) - drone.global_position.y
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= event.relative.x * 0.005
 		pitch = clampf(pitch + event.relative.y * 0.005, 0.05, 1.45)
