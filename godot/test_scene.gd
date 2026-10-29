@@ -15,6 +15,18 @@ func _check() -> void:
 	assert(is_equal_approx(scene.truck.position.y, scene.height_at(scene.truck.position.x, scene.truck.position.z)))
 	assert(scene.truck.get_node("Cab").material_override.albedo_color == Color("cf252a"))
 	assert(scene.truck.get_node("CargoBox").material_override.albedo_color == Color("cf252a"))
+	scene._build_drone_visual("heavy_quad")
+	var front_props := 0
+	var rear_props := 0
+	for child in scene.drone.get_children():
+		if child is MeshInstance3D and child.mesh is CylinderMesh:
+			if child.position.z < 0:
+				front_props += 1
+				assert(child.material_override.albedo_color == Color("f36f3b"))
+			else:
+				rear_props += 1
+				assert(child.material_override.albedo_color == Color("2f7de1"))
+	assert(front_props == 2 and rear_props == 2)
 	var upward_normals := false
 	for child in scene.get_children():
 		if child is MeshInstance3D and child.material_override is ShaderMaterial:

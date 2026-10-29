@@ -171,6 +171,23 @@ def test_direct_tcp_pose_and_images_with_stream_restart(probe):
     assert native.capture(1, 'b')['stats']['frames'] == 4
 
 
+def test_one_shot_profile_is_exposed_and_deduplicated(probe):
+    native = probe()
+    profile = {'schema_version': 1, 'stream_id': 'a', 'profile_name': 'betaflight_heavy_quad',
+               'backend': 'betaflight', 'drone_model': 'heavy_quad'}
+    native.settings.socket.send_multipart([b'render/drone_1/profile', json.dumps(profile).encode()])
+    assert native.event(lambda e: e.get('profile') == profile)['profile'] == profile
+    native.settings.socket.send_multipart([b'render/drone_1/profile', json.dumps(profile).encode()])
+    time.sleep(0.1)
+    events = []
+    while True:
+        try:
+            events.append(native.events.get_nowait())
+        except Empty:
+            break
+    assert not any(event.get('profile') == profile for event in events)
+
+
 def test_invalid_data_and_immutable_configuration(probe):
     native = probe()
     native.settings.put(json.dumps(config()))

@@ -9,6 +9,7 @@ var control_sent := false
 var previous_spawn: Dictionary = {}
 var previous_wind: Dictionary = {}
 var previous_control: Dictionary = {}
+var previous_profile: Dictionary = {}
 
 func _initialize() -> void:
 	_start.call_deferred()
@@ -40,6 +41,10 @@ func _process(_delta: float) -> bool:
 	if wind != previous_wind:
 		print("PROBE ", JSON.stringify({"wind_state":wind}))
 		previous_wind = wind.duplicate(true)
+	var profile := adapter.get_profile()
+	if profile != previous_profile:
+		print("PROBE ", JSON.stringify({"profile": profile}))
+		previous_profile = profile.duplicate(true)
 	if not control_sent and control_action in ["wind", "wind_edit"] and not wind.is_empty() and wind.controller_id == adapter.get_stats().controller_id:
 		control_sent = adapter.publish_wind({"physics_id":wind.physics_id,"episode_id":wind.episode_id,
 			"request_id":"native-wind","settings":_wind_settings(wind)})

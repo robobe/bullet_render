@@ -32,6 +32,7 @@ var spectator: Camera3D
 var drone: Node3D
 var truck: Node3D
 var status: Label
+var profile_label: Label
 var preview: TextureRect
 var noise := FastNoiseLite.new()
 var yaw := 0.7
@@ -43,6 +44,7 @@ var fps_frames := 0
 var fps_started := 0
 var measured_fps := 0.0
 var active_config: Dictionary = {}
+var active_profile: Dictionary = {}
 var last_stats_ms := 0
 var timing_samples := {"capture_ms": [], "render_wait_ms": [], "readback_ms": [], "publish_ms": [], "source_age_ms": []}
 var control_buttons: Dictionary = {}
@@ -248,19 +250,7 @@ func _path() -> void:
 func _cameras() -> void:
 	add_child(drone)
 	drone.position.y = 2
-	var body := box(drone, Vector3.ZERO, Vector3(0.24, 0.08, 0.32), Color("e9a753"))
-	body.layers = 2
-	for x in [-0.22, 0.22]:
-		for z in [-0.22, 0.22]:
-			var arm := box(drone, Vector3(x/2, 0, z/2), Vector3(0.045, 0.035, 0.35), Color("263a42"))
-			arm.rotation.y = -signf(x*z) * PI/4
-			arm.layers = 2
-			var prop := CylinderMesh.new()
-			prop.height = 0.012
-			prop.top_radius = 0.1
-			prop.bottom_radius = 0.1
-			var motor := mesh_node(drone, prop, Vector3(x, 0.04, z), Color("e1e8db"))
-			motor.layers = 2
+	_build_drone_visual("racer")
 	spectator = Camera3D.new()
 	spectator.far = 1500
 	add_child(spectator)
@@ -280,6 +270,29 @@ func _cameras() -> void:
 	fpv.current = true
 	fpv.position = drone.position
 
+func _build_drone_visual(model: String) -> void:
+	for child in drone.get_children():
+		child.free()
+	var heavy := model == "heavy_quad"
+	var rotor_offset := 0.240416 if heavy else 0.22
+	var prop_radius := 0.2286 if heavy else 0.1
+	var arm_length := 0.48 if heavy else 0.35
+	var body_size := Vector3(0.48, 0.14, 0.48) if heavy else Vector3(0.24, 0.08, 0.32)
+	var body := box(drone, Vector3.ZERO, body_size, Color("263a42") if heavy else Color("e9a753"))
+	body.layers = 2
+	for x in [-rotor_offset, rotor_offset]:
+		for z in [-rotor_offset, rotor_offset]:
+			var arm := box(drone, Vector3(x/2, 0, z/2), Vector3(0.045, 0.035, arm_length), Color("172b32"))
+			arm.rotation.y = -signf(x*z) * PI/4
+			arm.layers = 2
+			var prop := CylinderMesh.new()
+			prop.height = 0.012
+			prop.top_radius = prop_radius
+			prop.bottom_radius = prop_radius
+			var prop_color := Color("f36f3b") if z < 0 else Color("2f7de1")
+			var motor := mesh_node(drone, prop, Vector3(x, 0.04, z), prop_color)
+			motor.layers = 2
+
 func _ui() -> void:
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
@@ -293,6 +306,12 @@ func _ui() -> void:
 	title.position = Vector2(28, 15)
 	title.add_theme_font_size_override("font_size", 23)
 	canvas.add_child(title)
+	profile_label = Label.new()
+	profile_label.text = "PROFILE  Unknown"
+	profile_label.position = Vector2(610, 19)
+	profile_label.modulate = Color("f5c27a")
+	profile_label.add_theme_font_size_override("font_size", 16)
+	canvas.add_child(profile_label)
 	status = Label.new()
 	status.position = Vector2(28, 51)
 	status.modulate = Color("bfd8cc")
@@ -454,6 +473,12 @@ func _physics_process(_delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	_update_controls()
+	if adapter != null:
+		var profile := adapter.get_profile()
+		if not profile.is_empty() and profile != active_profile:
+			active_profile = profile.duplicate(true)
+			_build_drone_visual(str(profile.drone_model))
+			profile_label.text = "PROFILE  %s · %s · %s" % [str(profile.backend).capitalize(), profile.drone_model, profile.profile_name]
 	if not capture_only and not busy:
 		var request := adapter.poll_request()
 		if not adapter.get_stats().error.is_empty():

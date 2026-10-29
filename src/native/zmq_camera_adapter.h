@@ -20,6 +20,7 @@ public:
     bool publish_collision(const godot::Dictionary &report);
     bool publish_wind(const godot::Dictionary &request);
     godot::Dictionary get_wind_state();
+    godot::Dictionary get_profile();
     bool publish_spawn(const godot::Dictionary &request);
     godot::Dictionary get_spawn_state();
     bool publish_control(const godot::String &action);

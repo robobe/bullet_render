@@ -133,6 +133,14 @@ bool valid_config(const Dictionary &d) {
         double(camera["fov_x_deg"]) < 180 &&
         int64_t(camera["width_px"]) * int64_t(camera["height_px"]) * 3 <= MAX_IMAGE_BYTES;
 }
+bool valid_profile(const Dictionary &d) {
+    if (!shape(d, {"schema_version", "stream_id", "profile_name", "backend", "drone_model"}) ||
+        !number(d["schema_version"], 1, 1, true) || !text(d["stream_id"]) ||
+        !text(d["profile_name"]) || !text(d["backend"]) || !text(d["drone_model"])) return false;
+    const String backend = d["backend"], model = d["drone_model"];
+    return (backend == "internal" || backend == "betaflight") &&
+        (model == "racer" || model == "heavy_quad");
+}
 bool valid_stamp(const Dictionary &s) {
     if (!shape(s, {"physics_id", "episode_id", "stream_id", "step_index", "simulation_time_s", "measurement_us"})) return false;
     for (const auto key : {"physics_id", "episode_id", "stream_id"}) if (!control_identity(s[key])) return false;
@@ -209,7 +217,7 @@ Dictionary parse(const std::string &raw) {
 
 struct ZmqCameraAdapter::Impl {
     std::mutex mutex;
-    std::string config_slot, pose_slot, collision_pose_slot, state_slot, collision_outgoing, spawn_slot, spawn_outgoing, wind_slot, wind_outgoing;
+    std::string config_slot, profile_slot, pose_slot, collision_pose_slot, state_slot, collision_outgoing, spawn_slot, spawn_outgoing, wind_slot, wind_outgoing;
     Clock::time_point state_received{}, valid_state_received{}, spawn_received{}, valid_spawn_received{}, wind_received{}, valid_wind_received{};
     std::deque<std::pair<std::string, int64_t>> commands;
     std::string controller_id = std::to_string(getpid()) + "-" + std::to_string(Clock::now().time_since_epoch().count());
@@ -226,7 +234,7 @@ struct ZmqCameraAdapter::Impl {
     bullet_msgs::FrameWriter images;
     bool running = false;
     String error, capture_stream;
-    Dictionary config, camera;
+    Dictionary config, camera, profile;
     std::set<String> retired;
     void *context = nullptr, *publisher = nullptr;
     std::thread receiver;
@@ -327,15 +335,17 @@ struct ZmqCameraAdapter::Impl {
                 } while (more);
                 if (malformed || parts != 2) { ++invalid; continue; }
                 const bool is_config = topic == "render/drone_1/config";
+                const bool is_profile = topic == "render/drone_1/profile";
                 const bool is_state = topic == bullet_msgs::STATE_TOPIC;
                 const bool is_spawn = topic == bullet_msgs::SPAWN_STATE_TOPIC;
                 const bool is_wind = topic == bullet_msgs::WIND_STATE_TOPIC;
-                if (!is_wind && !is_spawn && !is_config && !is_state && topic != "render/drone_1/pose") continue;
+                if (!is_wind && !is_spawn && !is_config && !is_profile && !is_state && topic != "render/drone_1/pose") continue;
                 std::lock_guard lock(mutex);
                 if (is_wind) { wind_slot = std::move(raw); wind_received = Clock::now(); continue; }
                 if (is_spawn) { spawn_slot = std::move(raw); spawn_received = Clock::now(); continue; }
                 if (is_state) { state_slot = std::move(raw); state_received = Clock::now(); continue; }
                 if (is_config) config_slot = std::move(raw);
+                else if (is_profile) profile_slot = std::move(raw);
                 else {
                     if (!pose_slot.empty()) ++superseded;
                     collision_pose_slot = raw;
@@ -368,6 +378,7 @@ void ZmqCameraAdapter::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_control_state"), &ZmqCameraAdapter::get_control_state);
     ClassDB::bind_method(D_METHOD("publish_wind", "request"), &ZmqCameraAdapter::publish_wind);
     ClassDB::bind_method(D_METHOD("get_wind_state"), &ZmqCameraAdapter::get_wind_state);
+    ClassDB::bind_method(D_METHOD("get_profile"), &ZmqCameraAdapter::get_profile);
     ClassDB::bind_method(D_METHOD("publish_spawn", "request"), &ZmqCameraAdapter::publish_spawn);
     ClassDB::bind_method(D_METHOD("get_spawn_state"), &ZmqCameraAdapter::get_spawn_state);
     ClassDB::bind_method(D_METHOD("close"), &ZmqCameraAdapter::close);
@@ -734,6 +745,22 @@ Dictionary ZmqCameraAdapter::get_wind_state() {
     for (const auto key : {"physics_id", "episode_id", "controller_id"})
         if (impl->wind_state[key] != control[key]) return {};
     return impl->wind_state;
+}
+
+Dictionary ZmqCameraAdapter::get_profile() {
+    std::string raw;
+    { std::lock_guard lock(impl->mutex); raw.swap(impl->profile_slot); }
+    if (!raw.empty()) {
+        const Dictionary candidate = parse(raw);
+        if (!valid_profile(candidate)) {
+            ++impl->invalid;
+        } else if (!impl->config.is_empty() && candidate["stream_id"] != impl->config["stream_id"]) {
+            ++impl->invalid;
+        } else if (impl->profile.is_empty() || candidate["stream_id"] != impl->profile["stream_id"]) {
+            impl->profile = candidate;
+        }
+    }
+    return impl->profile;
 }
 
 
