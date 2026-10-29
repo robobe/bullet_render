@@ -89,7 +89,13 @@ func _run() -> void:
 	require(not truck_ray.is_empty() and truck_ray.position.y < scene.truck.position.y + 0.001, "pick ray hit truck")
 	panel.presets.presets["Test"] = {"position_m": [12.0, 13.0, 80.0], "takeoff_height_m": 8.5}
 	panel._refresh_presets("Test")
-	panel.load_selected()
+	var test_index := -1
+	for i in range(panel.preset_list.item_count):
+		if panel.preset_list.get_item_text(i) == "Test":
+			test_index = i
+			break
+	require(test_index >= 0, "preset combo missing Test")
+	panel.preset_list.item_selected.emit(test_index)
 	require(panel.draft == [12.0, 13.0, 80.0] and panel.takeoff.value == 8.5 and scene.drone.position == actual, "Load must edit only draft")
 	panel.pending = {"request_id": "pending", "physics_id": "old"}
 	panel.update_state({"physics_id": "new", "state": "stopped", "controller_id": "controller"}, {}, "controller")

@@ -67,6 +67,7 @@ func _ready() -> void:
 	legend.modulate = Color("bfd8cc")
 	column.add_child(legend)
 	pick_button = _button(column, "Pick position on landscape", _begin_pick)
+	pick_button.custom_minimum_size.y = 38
 	xy_label = Label.new()
 	column.add_child(xy_label)
 	var altitude_row := HBoxContainer.new()
@@ -99,7 +100,10 @@ func _ready() -> void:
 	takeoff.custom_minimum_size.x = 150
 	takeoff_row.add_child(takeoff)
 	preset_list = OptionButton.new()
+	preset_list.custom_minimum_size.y = 38
+	preset_list.tooltip_text = "Select a saved scenario; it loads into the draft immediately."
 	column.add_child(preset_list)
+	preset_list.item_selected.connect(func(_index: int): load_selected())
 	preset_name = LineEdit.new()
 	preset_name.placeholder_text = "Scenario name"
 	preset_name.max_length = 64
@@ -107,9 +111,10 @@ func _ready() -> void:
 	column.add_child(preset_name)
 	var row := HBoxContainer.new()
 	column.add_child(row)
-	load_button = _button(row, "Load draft", load_selected)
-	save_button = _button(row, "Save preset", save_draft)
-	apply_button = _button(column, "Apply · reset and preview", apply_draft)
+	load_button = _button(row, "Load selected", load_selected)
+	save_button = _button(row, "Save as preset", save_draft)
+	apply_button = _button(column, "APPLY SCENARIO · RESET AND PREVIEW", apply_draft)
+	apply_button.custom_minimum_size.y = 46
 	applied_label = Label.new()
 	applied_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	applied_label.custom_minimum_size.x = 340
@@ -126,6 +131,25 @@ func _ready() -> void:
 func _button(parent: Node, label: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = label
+	button.custom_minimum_size.y = 34
+	button.add_theme_font_size_override("font_size", 14)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color("284c68")
+	normal.border_color = Color("5e91ad")
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(5)
+	var hover := normal.duplicate()
+	hover.bg_color = Color("3d7692")
+	var pressed := normal.duplicate()
+	pressed.bg_color = Color("1b394b")
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	if label.begins_with("APPLY"):
+		normal.bg_color = Color("227052")
+		normal.border_color = Color("70d6ad")
+		hover.bg_color = Color("2f966d")
+		button.add_theme_color_override("font_color", Color("effff6"))
 	button.pressed.connect(callback)
 	parent.add_child(button)
 	return button
