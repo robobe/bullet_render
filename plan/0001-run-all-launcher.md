@@ -21,8 +21,8 @@ then run the flight supervisor in the foreground with reliable cleanup.
 
 ## Status
 
-Pending.
+Complete.
 
 ## Implementation commit
 
-Pending.
+`1b5378f`
