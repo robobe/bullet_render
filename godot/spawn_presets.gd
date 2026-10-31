@@ -4,7 +4,7 @@ const PATH := "user://spawn_scenarios.json"
 const MAX_PRESETS := 128
 const MAX_BYTES := 65536
 const DEFAULT_TAKEOFF_M := 20.0
-const DEFAULT_SPAWN_CLEARANCE_M := 0.10
+const DEFAULT_SPAWN_CLEARANCE_M := 0.50
 var presets: Dictionary = {"Default": {"position_m": [0.0, 0.0, DEFAULT_SPAWN_CLEARANCE_M], "takeoff_height_m": DEFAULT_TAKEOFF_M}}
 var error := ""
 

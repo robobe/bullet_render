@@ -53,7 +53,7 @@ func _run() -> void:
 	panel.physics_update()
 	require(not panel.valid_draft(), "below hills allowed")
 	var ground: float = panel.terrain_height
-	panel.draft[2] = ground + 0.10
+	panel.draft[2] = ground + 0.50
 	require(panel.valid_draft(), "exact local clearance rejected")
 	panel.draft[0] = 251.0
 	panel._draft_changed()
@@ -82,7 +82,7 @@ func _run() -> void:
 	panel.physics_update()
 	require(absf(float(panel.draft[0])) > 100 and absf(float(panel.draft[1])) > 100, "selection limited to clearing")
 	require(panel.terrain_valid, "terrain ray missed")
-	require(panel.valid_draft() and float(panel.draft[2]) >= panel.terrain_height + 0.10 and float(panel.draft[2]) < panel.terrain_height + 0.1011, "pick did not automatically set terrain clearance")
+	require(panel.valid_draft() and float(panel.draft[2]) >= panel.terrain_height + 0.50 and float(panel.draft[2]) < panel.terrain_height + 0.5011, "pick did not automatically set terrain clearance")
 	require(scene.drone.position == actual, "draft teleported actual drone")
 	# Truck colliders and terrain picking occupy separate collision layers.
 	var truck_ray: Dictionary = panel._terrain_ray(scene.truck.position + Vector3(0, 100, 0), scene.truck.position - Vector3(0, 100, 0))
