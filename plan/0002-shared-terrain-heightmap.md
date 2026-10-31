@@ -26,8 +26,8 @@ Export the existing Godot procedural terrain into shared heightmap/mesh assets c
 
 ## Status
 
-Pending
+Implemented and verified
 
 ## Implementation commit
 
-Pending
+`471576d`
