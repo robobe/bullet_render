@@ -4,7 +4,8 @@ const PATH := "user://spawn_scenarios.json"
 const MAX_PRESETS := 128
 const MAX_BYTES := 65536
 const DEFAULT_TAKEOFF_M := 20.0
-var presets: Dictionary = {"Default": {"position_m": [0.0, 0.0, 0.015], "takeoff_height_m": DEFAULT_TAKEOFF_M}}
+const DEFAULT_SPAWN_CLEARANCE_M := 0.10
+var presets: Dictionary = {"Default": {"position_m": [0.0, 0.0, DEFAULT_SPAWN_CLEARANCE_M], "takeoff_height_m": DEFAULT_TAKEOFF_M}}
 var error := ""
 
 static func valid_name(value: Variant) -> bool:
@@ -55,7 +56,7 @@ func load_file(path: String = PATH) -> bool:
 			error = "Invalid preset entry"
 			return false
 		converted[key] = entry.duplicate(true)
-	presets = {"Default": {"position_m": [0.0, 0.0, 0.015], "takeoff_height_m": DEFAULT_TAKEOFF_M}}
+	presets = {"Default": {"position_m": [0.0, 0.0, DEFAULT_SPAWN_CLEARANCE_M], "takeoff_height_m": DEFAULT_TAKEOFF_M}}
 	presets.merge(converted, true)
 	return true
 

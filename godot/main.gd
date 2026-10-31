@@ -9,6 +9,7 @@ const COLLISION_RETRY_MS := 100
 const COLLISION_ACK_TIMEOUT_MS := 1000
 const WORLD_SIZE := 500.0
 const GRID := 120
+const TERRAIN_HEIGHTMAP_PATH := "res://../../terrain/terrain_heightmap.f32"
 const STALE_MS := 1000
 const SPECTATOR_PAN_SPEED_M_PER_PIXEL := 0.08
 const SPECTATOR_TARGET_Y_MIN_M := 0.0
@@ -38,6 +39,7 @@ var status: Label
 var profile_label: Label
 var preview: TextureRect
 var noise := FastNoiseLite.new()
+var shared_heights := PackedFloat32Array()
 var yaw := 0.7
 var pitch := 0.45
 var distance := 65.0
@@ -72,6 +74,7 @@ func _ready() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	noise.seed = 271828
 	noise.frequency = 0.012
+	_load_shared_heightmap()
 	_world()
 	collision_detector = TruckCollision.new(get_world_3d(), truck)
 	_cameras()
@@ -89,8 +92,25 @@ func _ready() -> void:
 	print("Godot ready with native ZeroMQ camera adapter")
 
 func height_at(x: float, z: float) -> float:
+	if shared_heights.size() == (GRID + 1) * (GRID + 1):
+		var ix := clampi(roundi((x / WORLD_SIZE + 0.5) * GRID), 0, GRID)
+		var iz := clampi(roundi((z / WORLD_SIZE + 0.5) * GRID), 0, GRID)
+		return shared_heights[iz * (GRID + 1) + ix]
 	var clearing := smoothstep(22.0, 70.0, Vector2(x, z).length())
 	return (noise.get_noise_2d(x, z) + 0.65) * 24.0 * clearing
+
+func _load_shared_heightmap() -> void:
+	var path := ProjectSettings.globalize_path(TERRAIN_HEIGHTMAP_PATH)
+	if not FileAccess.file_exists(path):
+		push_warning("Shared terrain heightmap missing; using procedural fallback")
+		return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() != (GRID + 1) * (GRID + 1) * 4:
+		push_warning("Shared terrain heightmap invalid; using procedural fallback")
+		return
+	shared_heights.resize((GRID + 1) * (GRID + 1))
+	for index in shared_heights.size():
+		shared_heights[index] = file.get_float()
 
 func material(color: Color) -> StandardMaterial3D:
 	var result := StandardMaterial3D.new()

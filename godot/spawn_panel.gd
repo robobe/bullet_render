@@ -4,7 +4,7 @@ const Presets = preload("res://spawn_presets.gd")
 const Frames = preload("res://frames.gd")
 const UNSUPPORTED_MESSAGE := "Spawn selection requires connected external-RC physics."
 const PICK_LAYER := 2
-const CLEARANCE_M := 0.015
+const CLEARANCE_M := 0.10
 const INPUT_STEP_M := 0.001
 const TERRAIN_RAY_EPSILON_M := 0.00001
 const RETRY_MS := 100
@@ -14,7 +14,7 @@ const RECONCILE_MS := 2500
 var presets := Presets.new()
 var camera: Camera3D
 var adapter: ZmqCameraAdapter
-var draft: Array = [0.0, 0.0, 0.015]
+var draft: Array = [0.0, 0.0, CLEARANCE_M]
 var applied: Dictionary = {}
 var pending: Dictionary = {}
 var picking := false
@@ -76,7 +76,7 @@ func _ready() -> void:
 	z_label.text = "World Z (m)   "
 	altitude_row.add_child(z_label)
 	altitude = SpinBox.new()
-	altitude.min_value = 0.015
+	altitude.min_value = CLEARANCE_M
 	altitude.max_value = 500.0
 	altitude.step = INPUT_STEP_M
 	altitude.value = draft[2]
