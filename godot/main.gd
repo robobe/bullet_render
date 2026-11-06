@@ -11,6 +11,7 @@ const WORLD_SIZE := 500.0
 const GRID := 120
 const TERRAIN_HEIGHTMAP_PATH := "res://../../terrain/terrain_heightmap.f32"
 const STALE_MS := 1000
+const VIEWER_CAMERA_DISTANCE_M := 8.0
 const SPECTATOR_PAN_SPEED_M_PER_PIXEL := 0.08
 const SPECTATOR_TARGET_Y_MIN_M := 0.0
 const SPECTATOR_TARGET_Y_MAX_M := 250.0
@@ -61,9 +62,19 @@ var control_notice := ""
 var control_notice_until := 0
 
 @export var transport_config_path := "res://../configs/transport.json"
+@export var viewer_only := false
 
 func _ready() -> void:
-	if not capture_only and "nvidia" not in RenderingServer.get_video_adapter_vendor().to_lower():
+	if viewer_only:
+		var args := OS.get_cmdline_user_args()
+		if not args.is_empty():
+			if args.size() != 2 or args[0] != "--transport-config":
+				push_error("Viewer usage: -- --transport-config /absolute/path/to/transport.json")
+				get_tree().quit(1)
+				return
+			transport_config_path = args[1]
+		distance = VIEWER_CAMERA_DISTANCE_M
+	if not capture_only and not viewer_only and "nvidia" not in RenderingServer.get_video_adapter_vendor().to_lower():
 		push_error("NVIDIA is required. Launch with tools/run_godot.sh --path godot")
 		process_mode = Node.PROCESS_MODE_DISABLED
 		get_tree().quit(1)
@@ -418,6 +429,8 @@ func _ui() -> void:
 		wind_panel.visible = not wind_panel.visible
 		spawn_panel.hide())
 	toolbar.add_child(wind_button)
+	if viewer_only:
+		toolbar.hide()
 	windsock = Windsock.new()
 	add_child(windsock)
 	windsock.place_at_spawn([0., 0., 0.], height_at)
@@ -432,6 +445,9 @@ func _send_control(action: String) -> void:
 	control_notice_until = Time.get_ticks_msec() + 1500
 
 func _update_controls() -> void:
+	if viewer_only:
+		control_display = "VIEWER"
+		return
 	var state: Dictionary = {} if capture_only or adapter == null else adapter.get_control_state()
 	var connected := not state.is_empty()
 	var ready: bool = connected and state.controller_id == adapter.get_stats().controller_id
@@ -464,6 +480,8 @@ func _update_controls() -> void:
 	control_label.text = "%s\n%s" % [control_display.capitalize(), detail]
 
 func _physics_process(_delta: float) -> void:
+	if viewer_only:
+		return
 	spawn_panel.physics_update()
 	if capture_only or adapter == null:
 		return

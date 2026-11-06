@@ -156,6 +156,13 @@ uv sync --locked --all-packages --all-extras --all-groups
 
 ## Launch
 
+For a relocatable exported Linux viewer, see the sibling
+[external renderer package](../bullet_drone/external_render/README.md). Its
+standalone altitude-hold example starts automatically and owns the exported
+process, without the Godot editor, app or recorder. The export stages viewer-only
+mode; normal launches below retain their Start/Stop/Reset controls and NVIDIA
+startup policy.
+
 Run these in separate terminals, from the indicated directories. The recorder
 waits for physics to report a running simulation before creating a file.
 
